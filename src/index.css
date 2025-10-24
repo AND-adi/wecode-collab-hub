@@ -17,7 +17,7 @@ All colors MUST be HSL.
     --popover: 240 12% 8%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 262 83% 58%;
+    --primary: 262 83% 70%;
     --primary-foreground: 210 40% 98%;
 
     --secondary: 189 94% 43%;
@@ -26,7 +26,7 @@ All colors MUST be HSL.
     --muted: 240 10% 15%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 262 83% 58%;
+    --accent: 262 83% 70%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 84.2% 60.2%;
@@ -34,14 +34,14 @@ All colors MUST be HSL.
 
     --border: 240 10% 18%;
     --input: 240 10% 18%;
-    --ring: 262 83% 58%;
+    --ring: 262 83% 70%;
 
     --radius: 0.75rem;
 
     /* Wecode custom tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(262 83% 58%), hsl(189 94% 43%));
-    --gradient-radial: radial-gradient(circle at center, hsl(262 83% 58% / 0.2), transparent 70%);
-    --glow-primary: 0 0 30px hsl(262 83% 58% / 0.5);
+    --gradient-primary: linear-gradient(135deg, hsl(262 83% 70%), hsl(189 94% 43%));
+    --gradient-radial: radial-gradient(circle at center, hsl(262 83% 70% / 0.2), transparent 70%);
+    --glow-primary: 0 0 30px hsl(262 83% 70% / 0.5);
     --glow-secondary: 0 0 30px hsl(189 94% 43% / 0.5);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
