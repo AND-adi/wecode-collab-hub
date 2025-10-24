@@ -1,15 +1,167 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Video, Shuffle, Code, Globe } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { Video, Shuffle, Code, Globe, Loader2 } from "lucide-react";
 import AnimatedBackground from "@/components/AnimatedBackground";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 const RandomMatch = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [selectedLevel, setSelectedLevel] = useState<"Beginner" | "Intermediate" | "Advanced">("Intermediate");
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const skills = ["JavaScript", "Python", "React", "Node.js", "TypeScript", "Go"];
   const levels = ["Beginner", "Intermediate", "Advanced"];
+
+  useEffect(() => {
+    // Check auth status
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
+      setCurrentUser(user);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        navigate("/auth");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
+
+  const toggleLanguage = (lang: string) => {
+    setSelectedLanguages(prev =>
+      prev.includes(lang)
+        ? prev.filter(l => l !== lang)
+        : [...prev, lang]
+    );
+  };
+
+  const findMatch = async () => {
+    if (selectedLanguages.length === 0) {
+      toast({
+        title: "Select Languages",
+        description: "Please select at least one programming language",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentUser) return;
+
+    setIsSearching(true);
+
+    try {
+      // Add user to matching queue
+      const { error: queueError } = await supabase
+        .from("matching_queue")
+        .insert({
+          user_id: currentUser.id,
+          skill_level: selectedLevel,
+          preferred_languages: selectedLanguages,
+        });
+
+      if (queueError) throw queueError;
+
+      // Look for a match
+      const { data: potentialMatches, error: matchError } = await supabase
+        .from("matching_queue")
+        .select("*")
+        .neq("user_id", currentUser.id)
+        .limit(1);
+
+      if (matchError) throw matchError;
+
+      if (potentialMatches && potentialMatches.length > 0) {
+        // Found a match! Create session
+        const match = potentialMatches[0];
+
+        const { data: session, error: sessionError } = await supabase
+          .from("coding_sessions")
+          .insert({
+            status: "active",
+          })
+          .select()
+          .single();
+
+        if (sessionError) throw sessionError;
+
+        // Add both participants
+        await supabase.from("session_participants").insert([
+          { session_id: session.id, user_id: currentUser.id },
+          { session_id: session.id, user_id: match.user_id },
+        ]);
+
+        // Remove both from queue
+        await supabase
+          .from("matching_queue")
+          .delete()
+          .in("user_id", [currentUser.id, match.user_id]);
+
+        toast({
+          title: "Match Found!",
+          description: "Connecting you to your coding partner...",
+        });
+
+        // Navigate to session
+        navigate(`/session/${session.id}`);
+      } else {
+        // No match yet, wait for someone
+        toast({
+          title: "Searching for Match",
+          description: "Waiting for another developer to join...",
+        });
+
+        // Subscribe to queue changes
+        const channel = supabase
+          .channel("matching_queue_changes")
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "matching_queue",
+            },
+            async () => {
+              // Someone joined, try matching again
+              setTimeout(() => findMatch(), 1000);
+            }
+          )
+          .subscribe();
+
+        // Cleanup after 30 seconds
+        setTimeout(() => {
+          channel.unsubscribe();
+          setIsSearching(false);
+          supabase
+            .from("matching_queue")
+            .delete()
+            .eq("user_id", currentUser.id);
+        }, 30000);
+      }
+    } catch (error: any) {
+      console.error("Match error:", error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      setIsSearching(false);
+    }
+  };
 
   return (
     <div className="min-h-screen relative">
@@ -45,8 +197,13 @@ const RandomMatch = () => {
                   {levels.map((level) => (
                     <Badge
                       key={level}
-                      variant="outline"
-                      className="cursor-pointer hover:bg-primary/20 hover:border-primary transition-all px-4 py-2"
+                      variant={selectedLevel === level ? "default" : "outline"}
+                      className={`cursor-pointer transition-all px-4 py-2 ${
+                        selectedLevel === level
+                          ? "bg-primary border-primary"
+                          : "hover:bg-primary/20 hover:border-primary"
+                      }`}
+                      onClick={() => setSelectedLevel(level as "Beginner" | "Intermediate" | "Advanced")}
                     >
                       {level}
                     </Badge>
@@ -60,8 +217,13 @@ const RandomMatch = () => {
                   {skills.map((skill) => (
                     <Badge
                       key={skill}
-                      variant="outline"
-                      className="cursor-pointer hover:bg-secondary/20 hover:border-secondary transition-all px-4 py-2"
+                      variant={selectedLanguages.includes(skill) ? "default" : "outline"}
+                      className={`cursor-pointer transition-all px-4 py-2 ${
+                        selectedLanguages.includes(skill)
+                          ? "bg-secondary border-secondary"
+                          : "hover:bg-secondary/20 hover:border-secondary"
+                      }`}
+                      onClick={() => toggleLanguage(skill)}
                     >
                       {skill}
                     </Badge>
@@ -73,9 +235,20 @@ const RandomMatch = () => {
             <Button 
               className="w-full h-14 text-lg bg-gradient-to-r from-secondary to-primary hover:opacity-90 transition-opacity"
               size="lg"
+              onClick={findMatch}
+              disabled={isSearching}
             >
-              <Shuffle className="mr-2 w-6 h-6" />
-              Find a Match
+              {isSearching ? (
+                <>
+                  <Loader2 className="mr-2 w-6 h-6 animate-spin" />
+                  Searching for Match...
+                </>
+              ) : (
+                <>
+                  <Shuffle className="mr-2 w-6 h-6" />
+                  Find a Match
+                </>
+              )}
             </Button>
           </Card>
 

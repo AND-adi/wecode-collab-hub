@@ -8,6 +8,8 @@ import NotFound from "./pages/NotFound";
 import LiveCollaboration from "./pages/LiveCollaboration";
 import RandomMatch from "./pages/RandomMatch";
 import Problems from "./pages/Problems";
+import Auth from "./pages/Auth";
+import CodeSession from "./pages/CodeSession";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +24,8 @@ const App = () => (
           <Route path="/live-collaboration" element={<LiveCollaboration />} />
           <Route path="/random-match" element={<RandomMatch />} />
           <Route path="/problems" element={<Problems />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/session/:sessionId" element={<CodeSession />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

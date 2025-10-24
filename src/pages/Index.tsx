@@ -32,6 +32,7 @@ const Index = () => {
             <Button 
               size="lg"
               className="h-14 px-8 text-lg bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity glow-primary"
+              onClick={() => window.location.href = '/auth'}
             >
               Get Started Free
             </Button>
@@ -39,8 +40,9 @@ const Index = () => {
               size="lg"
               variant="outline"
               className="h-14 px-8 text-lg border-primary/50 hover:bg-primary/10"
+              onClick={() => window.location.href = '/random-match'}
             >
-              Watch Demo
+              Try Random Match
             </Button>
           </div>
 
