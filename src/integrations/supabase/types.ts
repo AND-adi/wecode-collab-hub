@@ -14,7 +14,115 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      chat_messages: {
+        Row: {
+          created_at: string | null
+          id: string
+          message: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          message: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          message?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "coding_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coding_sessions: {
+        Row: {
+          code_content: string | null
+          created_at: string | null
+          id: string
+          status: Database["public"]["Enums"]["session_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          code_content?: string | null
+          created_at?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["session_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          code_content?: string | null
+          created_at?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["session_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      matching_queue: {
+        Row: {
+          created_at: string | null
+          id: string
+          preferred_languages: string[]
+          skill_level: Database["public"]["Enums"]["skill_level"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          preferred_languages: string[]
+          skill_level: Database["public"]["Enums"]["skill_level"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          preferred_languages?: string[]
+          skill_level?: Database["public"]["Enums"]["skill_level"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      session_participants: {
+        Row: {
+          id: string
+          joined_at: string | null
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string | null
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string | null
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_participants_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "coding_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +131,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      session_status: "waiting" | "active" | "completed"
+      skill_level: "Beginner" | "Intermediate" | "Advanced"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +259,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      session_status: ["waiting", "active", "completed"],
+      skill_level: ["Beginner", "Intermediate", "Advanced"],
+    },
   },
 } as const
