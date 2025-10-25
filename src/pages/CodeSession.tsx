@@ -229,133 +229,159 @@ const CodeSession = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Video Chat Section - Omegle Style */}
-      <div className="relative h-[60vh] bg-black">
-        {/* Remote Video (Main) */}
-        <video
-          ref={remoteVideoRef}
-          autoPlay
-          playsInline
-          className="w-full h-full object-cover"
-        />
-        
-        {/* Local Video (Picture-in-Picture) */}
-        <div className="absolute top-4 right-4 w-48 h-36 bg-black rounded-lg overflow-hidden shadow-2xl border-2 border-white/20">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover mirror"
-          />
-        </div>
+    <div className="min-h-screen bg-background p-6">
+      <div className="container mx-auto max-w-7xl">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Side - Video Sections & Chat */}
+          <div className="lg:col-span-1 space-y-4">
+            {/* Video Sections - Google Meet Style */}
+            <div className="space-y-4">
+              {/* Remote Participant Video */}
+              <Card className="card-glass overflow-hidden">
+                <div className="relative aspect-video bg-black">
+                  <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/70 backdrop-blur-sm rounded-full text-white text-xs">
+                    Participant
+                  </div>
+                </div>
+              </Card>
 
-        {/* Video Controls Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
-          <div className="container mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  Connected
-                </span>
-              </div>
-              <div className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white text-sm">
-                {participants.length} participant(s)
-              </div>
+              {/* Local User Video */}
+              <Card className="card-glass overflow-hidden">
+                <div className="relative aspect-video bg-black">
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover mirror"
+                  />
+                  <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/70 backdrop-blur-sm rounded-full text-white text-xs">
+                    You
+                  </div>
+                </div>
+              </Card>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="secondary" 
-                size="icon" 
-                className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30"
-                onClick={toggleVideo}
-              >
-                {isVideoEnabled ? <Video className="w-5 h-5 text-white" /> : <VideoOff className="w-5 h-5 text-white" />}
-              </Button>
-              <Button 
-                variant="secondary" 
-                size="icon" 
-                className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30"
-                onClick={toggleAudio}
-              >
-                {isAudioEnabled ? <Mic className="w-5 h-5 text-white" /> : <MicOff className="w-5 h-5 text-white" />}
-              </Button>
-              <Button 
-                variant="destructive" 
-                size="icon" 
-                className="w-12 h-12 rounded-full bg-red-500 hover:bg-red-600"
+
+            {/* Chat Box */}
+            <Card className="card-glass p-4">
+              <h3 className="text-lg font-semibold mb-3 text-foreground">Chat</h3>
+              <div className="flex flex-col h-64">
+                <div className="flex-1 bg-background/30 rounded-lg p-3 overflow-y-auto space-y-2 mb-3">
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${
+                        msg.user_id === currentUser?.id
+                          ? "justify-end"
+                          : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-[85%] rounded-lg p-2 ${
+                          msg.user_id === currentUser?.id
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <p className="text-xs break-words">{msg.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2">
+                  <Input
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                    placeholder="Type a message..."
+                    className="flex-1 text-sm"
+                  />
+                  <Button onClick={sendMessage} size="icon" className="shrink-0">
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-3 gap-3">
+              <Button
+                variant="outline"
+                className="w-full flex flex-col items-center gap-1 h-auto py-3"
                 onClick={endSession}
               >
                 <PhoneOff className="w-5 h-5" />
+                <span className="text-xs">Skip</span>
+              </Button>
+              <Button
+                variant="default"
+                className="w-full flex flex-col items-center gap-1 h-auto py-3 bg-gradient-to-r from-secondary to-primary"
+                onClick={() => {
+                  toast({
+                    title: "Collaboration Mode",
+                    description: "You can now code together!",
+                  });
+                }}
+              >
+                <Video className="w-5 h-5" />
+                <span className="text-xs">Collaborate</span>
+              </Button>
+              <Button
+                variant="destructive"
+                className="w-full flex flex-col items-center gap-1 h-auto py-3"
+                onClick={endSession}
+              >
+                <PhoneOff className="w-5 h-5" />
+                <span className="text-xs">End Call</span>
+              </Button>
+            </div>
+
+            {/* Video Controls */}
+            <div className="flex justify-center gap-3">
+              <Button
+                variant="secondary"
+                size="icon"
+                className="w-12 h-12 rounded-full"
+                onClick={toggleVideo}
+              >
+                {isVideoEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+              </Button>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="w-12 h-12 rounded-full"
+                onClick={toggleAudio}
+              >
+                {isAudioEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               </Button>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Code Editor Section */}
-      <div className="container mx-auto p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Code Editor - Takes most space */}
-          <Card className="lg:col-span-3 card-glass p-6">
+          {/* Right Side - Code Editor */}
+          <Card className="lg:col-span-2 card-glass p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gradient">Shared Code Editor</h2>
               <Badge variant="outline" className="bg-primary/10 border-primary text-primary">
-                Live Sync
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  Live Sync
+                </span>
               </Badge>
             </div>
             <textarea
               value={code}
               onChange={(e) => handleCodeChange(e.target.value)}
-              className="w-full h-[500px] bg-black/50 text-foreground font-mono text-sm p-4 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full h-[calc(100vh-12rem)] bg-black/50 text-foreground font-mono text-sm p-4 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="// Start coding together..."
               spellCheck="false"
             />
-          </Card>
-
-          {/* Chat Sidebar */}
-          <Card className="lg:col-span-1 card-glass p-4">
-            <h3 className="text-lg font-semibold mb-4 text-foreground">Chat</h3>
-            <div className="flex flex-col h-[500px]">
-              <div className="flex-1 bg-background/30 rounded-lg p-3 overflow-y-auto space-y-2 mb-3">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${
-                      msg.user_id === currentUser?.id
-                        ? "justify-end"
-                        : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-lg p-2 ${
-                        msg.user_id === currentUser?.id
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      <p className="text-xs break-words">{msg.message}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-2">
-                <Input
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                  placeholder="Message..."
-                  className="flex-1 text-sm"
-                />
-                <Button onClick={sendMessage} size="icon" className="shrink-0">
-                  <Send className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
           </Card>
         </div>
       </div>
