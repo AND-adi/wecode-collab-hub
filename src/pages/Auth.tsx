@@ -6,12 +6,24 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import AnimatedBackground from "@/components/AnimatedBackground";
+import { z } from "zod";
+
+const authSchema = z.object({
+  email: z.string()
+    .trim()
+    .email("Please enter a valid email address")
+    .max(255, "Email must be less than 255 characters"),
+  password: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .max(72, "Password must be less than 72 characters")
+});
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<{ email?: string; password?: string }>({});
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -26,13 +38,27 @@ const Auth = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationErrors({});
+
+    // Validate inputs
+    const validation = authSchema.safeParse({ email: email.trim(), password });
+    if (!validation.success) {
+      const errors: { email?: string; password?: string } = {};
+      validation.error.errors.forEach((err) => {
+        if (err.path[0] === "email") errors.email = err.message;
+        if (err.path[0] === "password") errors.password = err.message;
+      });
+      setValidationErrors(errors);
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+          email: validation.data.email,
+          password: validation.data.password,
         });
 
         if (error) throw error;
@@ -44,8 +70,8 @@ const Auth = () => {
         navigate("/");
       } else {
         const { error } = await supabase.auth.signUp({
-          email,
-          password,
+          email: validation.data.email,
+          password: validation.data.password,
           options: {
             emailRedirectTo: `${window.location.origin}/`,
           },
@@ -92,11 +118,19 @@ const Auth = () => {
             <Input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (validationErrors.email) {
+                  setValidationErrors({ ...validationErrors, email: undefined });
+                }
+              }}
               placeholder="your@email.com"
               required
               className="bg-background/50"
             />
+            {validationErrors.email && (
+              <p className="text-sm text-destructive">{validationErrors.email}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -104,11 +138,24 @@ const Auth = () => {
             <Input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (validationErrors.password) {
+                  setValidationErrors({ ...validationErrors, password: undefined });
+                }
+              }}
               placeholder="••••••••"
               required
               className="bg-background/50"
             />
+            {validationErrors.password && (
+              <p className="text-sm text-destructive">{validationErrors.password}</p>
+            )}
+            {!isLogin && !validationErrors.password && (
+              <p className="text-xs text-muted-foreground">
+                Minimum 8 characters required
+              </p>
+            )}
           </div>
 
           <Button
