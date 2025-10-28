@@ -89,7 +89,13 @@ const CodeSession = () => {
     });
 
     if (error) {
-      console.error("Error joining session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to join session",
+        variant: "destructive",
+      });
+      navigate("/random-match");
+      return;
     }
 
     // Load existing data
@@ -159,10 +165,9 @@ const CodeSession = () => {
 
       peerConnection.current = pc;
     } catch (error) {
-      console.error("Error setting up WebRTC:", error);
       toast({
         title: "Camera Error",
-        description: "Could not access camera/microphone",
+        description: "Could not access camera/microphone. Video features will be disabled.",
         variant: "destructive",
       });
     }
@@ -177,7 +182,20 @@ const CodeSession = () => {
     }
   };
 
+  const MAX_CODE_SIZE = 1024 * 100; // 100KB limit
+
   const handleCodeChange = async (newCode: string) => {
+    // Validate code size
+    const sizeInBytes = new Blob([newCode]).size;
+    if (sizeInBytes > MAX_CODE_SIZE) {
+      toast({
+        title: "Code Size Limit",
+        description: "Code content exceeds 100KB limit",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setCode(newCode);
     
     // Debounce the update
@@ -187,21 +205,30 @@ const CodeSession = () => {
       .eq("id", sessionId);
 
     if (error) {
-      console.error("Error updating code:", error);
+      toast({
+        title: "Error",
+        description: "Failed to sync code changes",
+        variant: "destructive",
+      });
     }
   };
 
   const sendMessage = async () => {
     if (!message.trim() || !currentUser) return;
 
-    const { error } = await supabase.from("chat_messages").insert({
-      session_id: sessionId,
-      user_id: currentUser.id,
-      message: message.trim(),
+    const { data, error } = await supabase.functions.invoke('send-chat-message', {
+      body: {
+        sessionId,
+        message: message.trim(),
+      },
     });
 
     if (error) {
-      console.error("Error sending message:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send message",
+        variant: "destructive",
+      });
     } else {
       setMessage("");
     }

@@ -86,30 +86,17 @@ const RandomMatch = () => {
       if (matchError) throw matchError;
 
       if (potentialMatches && potentialMatches.length > 0) {
-        // Found a match! Create session
+        // Found a match! Create session via edge function
         const match = potentialMatches[0];
 
-        const { data: session, error: sessionError } = await supabase
-          .from("coding_sessions")
-          .insert({
-            status: "active",
-          })
-          .select()
-          .single();
+        const { data: { session }, error: sessionError } = await supabase.functions.invoke(
+          'create-session',
+          {
+            body: { matchUserId: match.user_id }
+          }
+        );
 
         if (sessionError) throw sessionError;
-
-        // Add both participants
-        await supabase.from("session_participants").insert([
-          { session_id: session.id, user_id: currentUser.id },
-          { session_id: session.id, user_id: match.user_id },
-        ]);
-
-        // Remove both from queue
-        await supabase
-          .from("matching_queue")
-          .delete()
-          .in("user_id", [currentUser.id, match.user_id]);
 
         toast({
           title: "Match Found!",
@@ -153,10 +140,9 @@ const RandomMatch = () => {
         }, 30000);
       }
     } catch (error: any) {
-      console.error("Match error:", error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to find a match. Please try again.",
         variant: "destructive",
       });
       setIsSearching(false);
