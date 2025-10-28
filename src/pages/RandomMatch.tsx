@@ -65,34 +65,25 @@ const RandomMatch = () => {
     setIsSearching(true);
 
     try {
-      // Add user to matching queue
-      const { error: queueError } = await supabase
-        .from("matching_queue")
-        .insert({
-          user_id: currentUser.id,
-          skill_level: selectedLevel,
-          preferred_languages: selectedLanguages,
-        });
-
-      if (queueError) throw queueError;
-
-      // Look for a match
-      const { data: potentialMatches, error: matchError } = await supabase
-        .from("matching_queue")
-        .select("*")
-        .neq("user_id", currentUser.id)
-        .limit(1);
+      // Call secure edge function for matchmaking
+      const { data: matchResult, error: matchError } = await supabase.functions.invoke(
+        'find-match',
+        {
+          body: { 
+            skillLevel: selectedLevel,
+            preferredLanguages: selectedLanguages 
+          }
+        }
+      );
 
       if (matchError) throw matchError;
 
-      if (potentialMatches && potentialMatches.length > 0) {
+      if (matchResult.matched) {
         // Found a match! Create session via edge function
-        const match = potentialMatches[0];
-
-        const { data: { session }, error: sessionError } = await supabase.functions.invoke(
+        const { data: sessionData, error: sessionError } = await supabase.functions.invoke(
           'create-session',
           {
-            body: { matchUserId: match.user_id }
+            body: { matchUserId: matchResult.matchUserId }
           }
         );
 
@@ -104,7 +95,7 @@ const RandomMatch = () => {
         });
 
         // Navigate to session
-        navigate(`/session/${session.id}`);
+        navigate(`/session/${sessionData.session.id}`);
       } else {
         // No match yet, wait for someone
         toast({
