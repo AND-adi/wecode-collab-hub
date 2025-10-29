@@ -65,13 +65,35 @@ const RandomMatch = () => {
     setIsSearching(true);
 
     try {
-      // Call secure edge function for matchmaking
+      // Create a session immediately and navigate to it
+      const { data: tempSession, error: tempSessionError } = await supabase
+        .from('coding_sessions')
+        .insert({
+          status: 'waiting' as const,
+          code_content: '// Waiting for match...',
+        })
+        .select()
+        .single();
+
+      if (tempSessionError) throw tempSessionError;
+
+      // Add current user as participant
+      await supabase.from('session_participants').insert({
+        session_id: tempSession.id,
+        user_id: currentUser.id,
+      });
+
+      // Navigate to session immediately - user will see their video while searching
+      navigate(`/session/${tempSession.id}?searching=true`);
+
+      // Start matching process in background
       const { data: matchResult, error: matchError } = await supabase.functions.invoke(
         'find-match',
         {
           body: { 
             skillLevel: selectedLevel,
-            preferredLanguages: selectedLanguages 
+            preferredLanguages: selectedLanguages,
+            sessionId: tempSession.id
           }
         }
       );
@@ -79,56 +101,24 @@ const RandomMatch = () => {
       if (matchError) throw matchError;
 
       if (matchResult.matched) {
-        // Found a match! Create session via edge function
+        // Match found, create session connection
         const { data: sessionData, error: sessionError } = await supabase.functions.invoke(
           'create-session',
           {
-            body: { matchUserId: matchResult.matchUserId }
+            body: { 
+              matchUserId: matchResult.matchUserId,
+              existingSessionId: tempSession.id
+            }
           }
         );
 
         if (sessionError) throw sessionError;
 
-        toast({
-          title: "Match Found!",
-          description: "Connecting you to your coding partner...",
-        });
-
-        // Navigate to session
-        navigate(`/session/${sessionData.session.id}`);
-      } else {
-        // No match yet, wait for someone
-        toast({
-          title: "Searching for Match",
-          description: "Waiting for another developer to join...",
-        });
-
-        // Subscribe to queue changes
-        const channel = supabase
-          .channel("matching_queue_changes")
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "matching_queue",
-            },
-            async () => {
-              // Someone joined, try matching again
-              setTimeout(() => findMatch(), 1000);
-            }
-          )
-          .subscribe();
-
-        // Cleanup after 30 seconds
-        setTimeout(() => {
-          channel.unsubscribe();
-          setIsSearching(false);
-          supabase
-            .from("matching_queue")
-            .delete()
-            .eq("user_id", currentUser.id);
-        }, 30000);
+        // Update session status to active
+        await supabase
+          .from('coding_sessions')
+          .update({ status: 'active' })
+          .eq('id', tempSession.id);
       }
     } catch (error: any) {
       toast({

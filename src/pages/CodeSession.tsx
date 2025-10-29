@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,9 @@ import { Video, VideoOff, Mic, MicOff, PhoneOff, Send } from "lucide-react";
 const CodeSession = () => {
   const { sessionId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const isSearching = searchParams.get('searching') === 'true';
   
   const [code, setCode] = useState("// Start coding here...");
   const [message, setMessage] = useState("");
@@ -23,6 +25,7 @@ const CodeSession = () => {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
+  const [sessionStatus, setSessionStatus] = useState<string>('waiting');
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -41,7 +44,7 @@ const CodeSession = () => {
       joinSession(user.id);
     });
 
-    // Subscribe to code changes
+    // Subscribe to session status changes
     const codeChannel = supabase
       .channel(`session-${sessionId}`)
       .on(
@@ -54,6 +57,16 @@ const CodeSession = () => {
         },
         (payload) => {
           setCode(payload.new.code_content);
+          setSessionStatus(payload.new.status);
+          
+          // If session becomes active, initiate WebRTC connection
+          if (payload.new.status === 'active' && isSearching) {
+            toast({
+              title: "Match Found!",
+              description: "Connecting to your peer...",
+            });
+            setIsConnecting(false);
+          }
         }
       )
       .subscribe();
@@ -417,16 +430,19 @@ const CodeSession = () => {
                     playsInline
                     className="w-full h-full object-cover"
                   />
-                  {isConnecting && (
+                  {(isConnecting || sessionStatus === 'waiting') && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
                       <div className="text-center">
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                        <p className="text-white text-sm">Connecting to peer...</p>
+                        <p className="text-white text-sm font-medium">
+                          {sessionStatus === 'waiting' ? 'Searching for match...' : 'Connecting to peer...'}
+                        </p>
+                        <p className="text-white/70 text-xs mt-2">This may take a few moments</p>
                       </div>
                     </div>
                   )}
                   <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/70 backdrop-blur-sm rounded-full text-white text-xs">
-                    Participant
+                    {sessionStatus === 'waiting' ? 'Searching...' : 'Participant'}
                   </div>
                 </div>
               </Card>
