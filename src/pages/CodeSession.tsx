@@ -22,10 +22,13 @@ const CodeSession = () => {
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [isConnecting, setIsConnecting] = useState(true);
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
+  const signalingChannel = useRef<any>(null);
+  const iceCandidatesQueue = useRef<RTCIceCandidate[]>([]);
 
   useEffect(() => {
     // Get current user
@@ -78,6 +81,9 @@ const CodeSession = () => {
     return () => {
       codeChannel.unsubscribe();
       chatChannel.unsubscribe();
+      if (signalingChannel.current) {
+        signalingChannel.current.unsubscribe();
+      }
       cleanup();
     };
   }, [sessionId, navigate]);
@@ -138,8 +144,9 @@ const CodeSession = () => {
 
   const setupWebRTC = async () => {
     try {
+      // Get local media stream
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: { width: 1280, height: 720 },
         audio: true,
       });
 
@@ -148,26 +155,164 @@ const CodeSession = () => {
         localVideoRef.current.srcObject = stream;
       }
 
-      // Setup peer connection (simplified for now)
+      // Setup peer connection with STUN servers
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+        ],
       });
 
+      // Add local stream tracks to peer connection
       stream.getTracks().forEach((track) => {
         pc.addTrack(track, stream);
       });
 
+      // Handle incoming tracks from remote peer
       pc.ontrack = (event) => {
-        if (remoteVideoRef.current) {
+        console.log("Received remote track");
+        if (remoteVideoRef.current && event.streams[0]) {
           remoteVideoRef.current.srcObject = event.streams[0];
+          setIsConnecting(false);
+        }
+      };
+
+      // Handle ICE candidates
+      pc.onicecandidate = (event) => {
+        if (event.candidate && signalingChannel.current) {
+          console.log("Sending ICE candidate");
+          signalingChannel.current.send({
+            type: "broadcast",
+            event: "ice-candidate",
+            payload: {
+              candidate: event.candidate,
+              sessionId,
+            },
+          });
+        }
+      };
+
+      // Monitor connection state
+      pc.onconnectionstatechange = () => {
+        console.log("Connection state:", pc.connectionState);
+        if (pc.connectionState === "connected") {
+          setIsConnecting(false);
+        } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+          toast({
+            title: "Connection Issue",
+            description: "Trying to reconnect...",
+            variant: "destructive",
+          });
         }
       };
 
       peerConnection.current = pc;
+
+      // Setup signaling channel for WebRTC
+      signalingChannel.current = supabase.channel(`webrtc-${sessionId}`);
+
+      signalingChannel.current
+        .on("broadcast", { event: "offer" }, async ({ payload }: any) => {
+          console.log("Received offer");
+          if (peerConnection.current && payload.sessionId === sessionId) {
+            await peerConnection.current.setRemoteDescription(
+              new RTCSessionDescription(payload.offer)
+            );
+            
+            // Process queued ICE candidates
+            while (iceCandidatesQueue.current.length > 0) {
+              const candidate = iceCandidatesQueue.current.shift();
+              if (candidate) {
+                await peerConnection.current.addIceCandidate(candidate);
+              }
+            }
+
+            const answer = await peerConnection.current.createAnswer();
+            await peerConnection.current.setLocalDescription(answer);
+
+            signalingChannel.current.send({
+              type: "broadcast",
+              event: "answer",
+              payload: {
+                answer,
+                sessionId,
+              },
+            });
+          }
+        })
+        .on("broadcast", { event: "answer" }, async ({ payload }: any) => {
+          console.log("Received answer");
+          if (peerConnection.current && payload.sessionId === sessionId) {
+            await peerConnection.current.setRemoteDescription(
+              new RTCSessionDescription(payload.answer)
+            );
+            
+            // Process queued ICE candidates
+            while (iceCandidatesQueue.current.length > 0) {
+              const candidate = iceCandidatesQueue.current.shift();
+              if (candidate) {
+                await peerConnection.current.addIceCandidate(candidate);
+              }
+            }
+          }
+        })
+        .on("broadcast", { event: "ice-candidate" }, async ({ payload }: any) => {
+          console.log("Received ICE candidate");
+          if (peerConnection.current && payload.sessionId === sessionId) {
+            try {
+              const candidate = new RTCIceCandidate(payload.candidate);
+              
+              // If remote description is set, add candidate immediately
+              if (peerConnection.current.remoteDescription) {
+                await peerConnection.current.addIceCandidate(candidate);
+              } else {
+                // Queue candidates until remote description is set
+                iceCandidatesQueue.current.push(candidate);
+              }
+            } catch (error) {
+              console.error("Error adding ICE candidate:", error);
+            }
+          }
+        })
+        .subscribe(async (status) => {
+          if (status === "SUBSCRIBED") {
+            console.log("Signaling channel subscribed");
+            
+            // Check if we should create an offer (first user in the session)
+            const { data: participantsData } = await supabase
+              .from("session_participants")
+              .select("*")
+              .eq("session_id", sessionId)
+              .order("created_at", { ascending: true });
+
+            if (participantsData && participantsData.length > 0) {
+              const firstParticipant = participantsData[0];
+              const { data: { user } } = await supabase.auth.getUser();
+              
+              // If current user is the first participant, create offer
+              if (user && firstParticipant.user_id === user.id && peerConnection.current) {
+                console.log("Creating offer as first participant");
+                const offer = await peerConnection.current.createOffer();
+                await peerConnection.current.setLocalDescription(offer);
+
+                signalingChannel.current.send({
+                  type: "broadcast",
+                  event: "offer",
+                  payload: {
+                    offer,
+                    sessionId,
+                  },
+                });
+              }
+            }
+          }
+        });
     } catch (error) {
+      console.error("WebRTC setup error:", error);
+      setIsConnecting(false);
       toast({
         title: "Camera Error",
-        description: "Could not access camera/microphone. Video features will be disabled.",
+        description: "Could not access camera/microphone. Please allow permissions and refresh.",
         variant: "destructive",
       });
     }
@@ -272,6 +417,14 @@ const CodeSession = () => {
                     playsInline
                     className="w-full h-full object-cover"
                   />
+                  {isConnecting && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                      <div className="text-center">
+                        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                        <p className="text-white text-sm">Connecting to peer...</p>
+                      </div>
+                    </div>
+                  )}
                   <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/70 backdrop-blur-sm rounded-full text-white text-xs">
                     Participant
                   </div>
