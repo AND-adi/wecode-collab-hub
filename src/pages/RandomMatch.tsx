@@ -65,8 +65,8 @@ const RandomMatch = () => {
     setIsSearching(true);
 
     try {
-      // Create a session immediately and navigate to it
-      const { data: tempSession, error: tempSessionError } = await supabase
+      // Create a session immediately
+      const { data: newSession, error: sessionError } = await supabase
         .from('coding_sessions')
         .insert({
           status: 'waiting' as const,
@@ -75,55 +75,111 @@ const RandomMatch = () => {
         .select()
         .single();
 
-      if (tempSessionError) throw tempSessionError;
+      if (sessionError) throw sessionError;
 
       // Add current user as participant
       await supabase.from('session_participants').insert({
-        session_id: tempSession.id,
+        session_id: newSession.id,
         user_id: currentUser.id,
       });
 
-      // Navigate to session immediately - user will see their video while searching
-      navigate(`/session/${tempSession.id}?searching=true`);
+      // Navigate immediately so user sees their video
+      navigate(`/session/${newSession.id}?searching=true`);
 
-      // Start matching process in background
+      // Start background matching process
       const { data: matchResult, error: matchError } = await supabase.functions.invoke(
         'find-match',
         {
           body: { 
             skillLevel: selectedLevel,
-            preferredLanguages: selectedLanguages,
-            sessionId: tempSession.id
+            preferredLanguages: selectedLanguages
           }
         }
       );
 
-      if (matchError) throw matchError;
+      if (matchError) {
+        console.error('Match error:', matchError);
+        return;
+      }
 
       if (matchResult.matched) {
-        // Match found, create session connection
-        const { data: sessionData, error: sessionError } = await supabase.functions.invoke(
-          'create-session',
-          {
-            body: { 
-              matchUserId: matchResult.matchUserId,
-              existingSessionId: tempSession.id
-            }
-          }
-        );
+        // Match found! Add the matched user to our session
+        await supabase.from('session_participants').insert({
+          session_id: newSession.id,
+          user_id: matchResult.matchUserId,
+        });
 
-        if (sessionError) throw sessionError;
-
-        // Update session status to active
+        // Update session to active
         await supabase
           .from('coding_sessions')
           .update({ status: 'active' })
-          .eq('id', tempSession.id);
+          .eq('id', newSession.id);
+
+        // Remove both users from queue
+        await supabase
+          .from('matching_queue')
+          .delete()
+          .in('user_id', [currentUser.id, matchResult.matchUserId]);
+      } else {
+        // No immediate match - subscribe to queue changes
+        const channel = supabase
+          .channel(`queue-${currentUser.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'matching_queue',
+            },
+            async () => {
+              // Try matching again
+              const { data: retryMatch } = await supabase.functions.invoke(
+                'find-match',
+                {
+                  body: { 
+                    skillLevel: selectedLevel,
+                    preferredLanguages: selectedLanguages
+                  }
+                }
+              );
+
+              if (retryMatch?.matched) {
+                // Found a match!
+                await supabase.from('session_participants').insert({
+                  session_id: newSession.id,
+                  user_id: retryMatch.matchUserId,
+                });
+
+                await supabase
+                  .from('coding_sessions')
+                  .update({ status: 'active' })
+                  .eq('id', newSession.id);
+
+                await supabase
+                  .from('matching_queue')
+                  .delete()
+                  .in('user_id', [currentUser.id, retryMatch.matchUserId]);
+
+                channel.unsubscribe();
+              }
+            }
+          )
+          .subscribe();
+
+        // Timeout after 30 seconds
+        setTimeout(async () => {
+          channel.unsubscribe();
+          await supabase
+            .from('matching_queue')
+            .delete()
+            .eq('user_id', currentUser.id);
+        }, 30000);
       }
     } catch (error: any) {
+      console.error('Error finding match:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to find a match. Please try again.",
+        description: error.message || "Failed to start matching. Please try again.",
         variant: "destructive",
       });
       setIsSearching(false);
