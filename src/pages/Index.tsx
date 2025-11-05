@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Users, Shuffle, Trophy } from "lucide-react";
+import { Users, Shuffle, Trophy, Globe } from "lucide-react";
 import AnimatedBackground from "@/components/AnimatedBackground";
 import FeatureCard from "@/components/FeatureCard";
 
@@ -43,6 +43,15 @@ const Index = () => {
               onClick={() => window.location.href = '/random-match'}
             >
               Try Random Match
+            </Button>
+            <Button 
+              size="lg"
+              variant="outline"
+              className="h-14 px-8 text-lg border-secondary/50 hover:bg-secondary/10 gap-2"
+              onClick={() => window.location.href = '/world-chat'}
+            >
+              <Globe className="h-5 w-5" />
+              World Chat
             </Button>
           </div>
 

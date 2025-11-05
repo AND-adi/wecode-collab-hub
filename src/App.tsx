@@ -10,6 +10,7 @@ import RandomMatch from "./pages/RandomMatch";
 import Problems from "./pages/Problems";
 import Auth from "./pages/Auth";
 import CodeSession from "./pages/CodeSession";
+import WorldChat from "./pages/WorldChat";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/problems" element={<Problems />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/session/:sessionId" element={<CodeSession />} />
+          <Route path="/world-chat" element={<WorldChat />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
