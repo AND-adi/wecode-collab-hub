@@ -146,8 +146,8 @@ const WorldChat = () => {
             </p>
           </div>
 
-          <ScrollArea className="flex-1 pr-4 mb-4" ref={scrollRef}>
-            <div className="space-y-4">
+          <ScrollArea className="flex-1 pr-4 mb-4">
+            <div className="space-y-4" ref={scrollRef}>
               {messages.map((msg) => (
                 <div
                   key={msg.id}
