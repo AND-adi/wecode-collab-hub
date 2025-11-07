@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Send, Globe } from "lucide-react";
+import { z } from "zod";
 
 interface Message {
   id: string;
@@ -92,11 +93,30 @@ const WorldChat = () => {
     }
   }, [messages]);
 
+  const messageSchema = z.object({
+    message: z
+      .string()
+      .trim()
+      .min(1, "Message cannot be empty")
+      .max(500, "Message must be less than 500 characters"),
+  });
+
   const sendMessage = async () => {
-    if (!newMessage.trim() || !currentUserId) return;
+    if (!currentUserId) return;
+
+    const validation = messageSchema.safeParse({ message: newMessage });
+    
+    if (!validation.success) {
+      toast({
+        title: "Invalid message",
+        description: validation.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
+    }
 
     const { error } = await supabase.from("world_chat_messages").insert({
-      message: newMessage.trim(),
+      message: validation.data.message,
       user_id: currentUserId,
       user_email: currentUserEmail,
     });
