@@ -38,10 +38,11 @@ const LiveCollaboration = () => {
 
     setIsCreating(true);
     try {
+      // Create session in "waiting" status until another user joins
       const { data, error } = await supabase
         .from("coding_sessions")
         .insert({
-          status: "active",
+          status: "waiting",
         })
         .select()
         .single();
@@ -60,10 +61,10 @@ const LiveCollaboration = () => {
 
       toast({
         title: "Session created!",
-        description: "Redirecting to your session...",
+        description: "Share the session code with your teammate to start voice chat",
       });
 
-      navigate(`/session/${data.id}`);
+      navigate(`/session/${data.id}?waiting=true`);
     } catch (error) {
       console.error("Error creating session:", error);
       toast({
@@ -121,9 +122,15 @@ const LiveCollaboration = () => {
         throw participantError;
       }
 
+      // Update session status to active when second user joins
+      await supabase
+        .from("coding_sessions")
+        .update({ status: "active" })
+        .eq("id", session.id);
+
       toast({
         title: "Joined session!",
-        description: "Redirecting to the session...",
+        description: "Starting voice chat with your teammate...",
       });
 
       navigate(`/session/${session.id}`);

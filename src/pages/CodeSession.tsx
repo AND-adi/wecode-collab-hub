@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Video, VideoOff, Mic, MicOff, PhoneOff, Send } from "lucide-react";
+import { Video, VideoOff, Mic, MicOff, PhoneOff, Send, Copy, Check } from "lucide-react";
 
 const CodeSession = () => {
   const { sessionId } = useParams();
@@ -26,6 +26,7 @@ const CodeSession = () => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
   const [sessionStatus, setSessionStatus] = useState<string>('waiting');
+  const [sessionCodeCopied, setSessionCodeCopied] = useState(false);
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -410,12 +411,57 @@ const CodeSession = () => {
 
   const endSession = async () => {
     cleanup();
-    navigate("/random-match");
+    navigate("/live-collaboration");
+  };
+
+  const copySessionCode = () => {
+    if (sessionId) {
+      navigator.clipboard.writeText(sessionId);
+      setSessionCodeCopied(true);
+      toast({
+        title: "Session code copied!",
+        description: "Share this code with your teammate to join",
+      });
+      setTimeout(() => setSessionCodeCopied(false), 2000);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="container mx-auto max-w-7xl">
+        {/* Session Code Banner */}
+        {sessionStatus === 'waiting' && (
+          <Card className="mb-4 p-4 bg-primary/10 border-primary">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-foreground">Waiting for teammate...</h3>
+                <p className="text-sm text-muted-foreground">Share this session code:</p>
+                <code className="text-sm font-mono bg-background px-2 py-1 rounded mt-1 inline-block">
+                  {sessionId}
+                </code>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copySessionCode}
+                className="gap-2"
+              >
+                {sessionCodeCopied ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Copy Code
+                  </>
+                )}
+              </Button>
+            </div>
+          </Card>
+        )}
+        
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Side - Video Sections & Chat */}
           <div className="lg:col-span-1 space-y-4">
