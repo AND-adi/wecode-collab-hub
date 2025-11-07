@@ -4,9 +4,140 @@ import { Input } from "@/components/ui/input";
 import { Users, Copy, Code2 } from "lucide-react";
 import AnimatedBackground from "@/components/AnimatedBackground";
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const LiveCollaboration = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [sessionName, setSessionName] = useState("");
+  const [sessionCode, setSessionCode] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    };
+    checkAuth();
+  }, []);
+
+  const handleCreateSession = async () => {
+    if (!userId) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to create a session",
+        variant: "destructive",
+      });
+      navigate("/auth");
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const { data, error } = await supabase
+        .from("coding_sessions")
+        .insert({
+          status: "active",
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add current user as participant
+      const { error: participantError } = await supabase
+        .from("session_participants")
+        .insert({
+          session_id: data.id,
+          user_id: userId,
+        });
+
+      if (participantError) throw participantError;
+
+      toast({
+        title: "Session created!",
+        description: "Redirecting to your session...",
+      });
+
+      navigate(`/session/${data.id}`);
+    } catch (error) {
+      console.error("Error creating session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create session. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleJoinSession = async () => {
+    if (!userId) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to join a session",
+        variant: "destructive",
+      });
+      navigate("/auth");
+      return;
+    }
+
+    if (!sessionCode.trim()) {
+      toast({
+        title: "Session code required",
+        description: "Please enter a session code",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsJoining(true);
+    try {
+      // Check if session exists
+      const { data: session, error } = await supabase
+        .from("coding_sessions")
+        .select("*")
+        .eq("id", sessionCode.trim())
+        .single();
+
+      if (error) {
+        throw new Error("Session not found");
+      }
+
+      // Add user as participant
+      const { error: participantError } = await supabase
+        .from("session_participants")
+        .insert({
+          session_id: session.id,
+          user_id: userId,
+        });
+
+      if (participantError && participantError.code !== "23505") {
+        throw participantError;
+      }
+
+      toast({
+        title: "Joined session!",
+        description: "Redirecting to the session...",
+      });
+
+      navigate(`/session/${session.id}`);
+    } catch (error) {
+      console.error("Error joining session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to join session. Please check the code and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsJoining(false);
+    }
+  };
 
   return (
     <div className="min-h-screen relative">
@@ -41,12 +172,18 @@ const LiveCollaboration = () => {
               
               <div className="space-y-4">
                 <Input
-                  placeholder="Session name"
+                  placeholder="Session name (optional)"
                   className="bg-background/50 border-border"
+                  value={sessionName}
+                  onChange={(e) => setSessionName(e.target.value)}
                 />
-                <Button className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity">
+                <Button 
+                  className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
+                  onClick={handleCreateSession}
+                  disabled={isCreating}
+                >
                   <Code2 className="mr-2 w-5 h-5" />
-                  Create Session
+                  {isCreating ? "Creating..." : "Create Session"}
                 </Button>
               </div>
 
@@ -67,13 +204,18 @@ const LiveCollaboration = () => {
                 <Input
                   placeholder="Enter session code"
                   className="bg-background/50 border-border font-mono"
+                  value={sessionCode}
+                  onChange={(e) => setSessionCode(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && handleJoinSession()}
                 />
                 <Button 
                   variant="outline" 
                   className="w-full border-primary/50 hover:bg-primary/10"
+                  onClick={handleJoinSession}
+                  disabled={isJoining}
                 >
                   <Users className="mr-2 w-5 h-5" />
-                  Join Session
+                  {isJoining ? "Joining..." : "Join Session"}
                 </Button>
               </div>
 
